@@ -1,0 +1,424 @@
+local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local Player = Players.LocalPlayer
+
+local parentGui = (get_hidden_gui or gethui) and (get_hidden_gui or gethui)() or game:GetService("CoreGui")
+
+local old = parentGui:FindFirstChild("InvisibleGui2")
+if old then old:Destroy() end
+
+if getgenv()._invisDiedConn then
+    getgenv()._invisDiedConn:Disconnect()
+    getgenv()._invisDiedConn = nil
+end
+if getgenv()._invisClone and getgenv()._invisClone.Parent then
+    pcall(function() getgenv()._invisClone:Destroy() end)
+end
+if getgenv()._invisChar and getgenv()._invisChar.Parent ~= Workspace then
+    pcall(function() getgenv()._invisChar.Parent = Workspace end)
+end
+if getgenv()._camOrientUnbind then
+    pcall(getgenv()._camOrientUnbind)
+end
+
+getgenv()._invisRunning = false
+getgenv()._invisEnabled = false
+getgenv()._invisTransition = false
+getgenv()._invisTurning = false
+getgenv()._invisCloneDead = false
+getgenv()._IsInvis = false
+getgenv()._invisClone = nil
+getgenv()._invisChar = nil
+getgenv()._invisRootCF = nil
+getgenv()._camOrientToken = 0
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "InvisibleGui2"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = parentGui
+
+if syn and syn.protect_gui then
+    pcall(function() syn.protect_gui(gui) end)
+end
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.fromOffset(100, 70)
+frame.Position = UDim2.new(0.1, 0, 0.4, 0)
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+frame.BackgroundTransparency = 0.9
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+frame.Parent = gui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = frame
+
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 2
+stroke.Color = Color3.fromRGB(255, 255, 255)
+stroke.Parent = frame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -16, 0, 22)
+title.Position = UDim2.fromOffset(8, 4)
+title.BackgroundTransparency = 1
+title.Text = "Invisible"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
+title.TextXAlignment = Enum.TextXAlignment.Center
+title.Parent = frame
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(1, -16, 0, 33)
+toggleBtn.Position = UDim2.new(0, 8, 0, 28)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.BackgroundTransparency = 1
+toggleBtn.BorderSizePixel = 0
+toggleBtn.Text = "Invisible"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 13
+toggleBtn.AutoButtonColor = false
+toggleBtn.Parent = frame
+
+local bc = Instance.new("UICorner")
+bc.CornerRadius = UDim.new(0, 8)
+bc.Parent = toggleBtn
+
+local stroke2 = Instance.new("UIStroke")
+stroke2.Thickness = 2
+stroke2.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+stroke2.Color = Color3.fromRGB(255, 255, 255)
+stroke2.Parent = toggleBtn
+
+local function updateVisual()
+    if getgenv()._IsInvis then
+        stroke2.Color = Color3.fromRGB(0, 255, 100)
+        toggleBtn.TextColor3 = Color3.fromRGB(0, 255, 100)
+        toggleBtn.Text = "Invisible: ON"
+    else
+        stroke2.Color = Color3.fromRGB(255, 255, 255)
+        toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        toggleBtn.Text = "Invisible"
+    end
+end
+
+local function lockCamera(savedCF)
+    local cam = Workspace.CurrentCamera
+    if not cam or not savedCF then return end
+
+    getgenv()._camOrientToken = (getgenv()._camOrientToken or 0) + 1
+    local token = getgenv()._camOrientToken
+
+    if getgenv()._camOrientUnbind then
+        pcall(getgenv()._camOrientUnbind)
+    end
+
+    local name = "InvisCamOrient_" .. tostring(token)
+    local startTime = os.clock()
+    local mouseMoved = false
+
+    local moveConn = UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            if input.Delta and (math.abs(input.Delta.X) > 1 or math.abs(input.Delta.Y) > 1) then
+                mouseMoved = true
+            end
+        end
+    end)
+
+    RunService:BindToRenderStep(name, 201, function()
+        if token ~= getgenv()._camOrientToken then
+            pcall(function() RunService:UnbindFromRenderStep(name) end)
+            pcall(function() moveConn:Disconnect() end)
+            return
+        end
+
+        if os.clock() - startTime > 0.01 then
+            pcall(function() RunService:UnbindFromRenderStep(name) end)
+            pcall(function() moveConn:Disconnect() end)
+            return
+        end
+
+        if mouseMoved then
+            pcall(function() RunService:UnbindFromRenderStep(name) end)
+            pcall(function() moveConn:Disconnect() end)
+            return
+        end
+
+        cam.CFrame = savedCF
+    end)
+
+    getgenv()._camOrientUnbind = function()
+        pcall(function() RunService:UnbindFromRenderStep(name) end)
+        pcall(function() moveConn:Disconnect() end)
+    end
+end
+
+local function cleanup()
+    if getgenv()._invisDiedConn then
+        getgenv()._invisDiedConn:Disconnect()
+        getgenv()._invisDiedConn = nil
+    end
+    getgenv()._invisClone = nil
+    getgenv()._invisChar = nil
+    getgenv()._invisRootCF = nil
+    getgenv()._IsInvis = false
+    getgenv()._invisRunning = false
+    getgenv()._invisEnabled = false
+end
+
+local function startInvis()
+    if getgenv()._invisRunning then return end
+    getgenv()._invisRunning = true
+    getgenv()._invisEnabled = true
+    getgenv()._invisTransition = true
+    getgenv()._invisCloneDead = false
+
+    local Character = Player.Character
+    if not Character then
+        getgenv()._invisRunning = false
+        getgenv()._invisEnabled = false
+        getgenv()._invisTransition = false
+        return
+    end
+
+    if getgenv()._invisDiedConn then
+        getgenv()._invisDiedConn:Disconnect()
+        getgenv()._invisDiedConn = nil
+    end
+
+    local cam = Workspace.CurrentCamera
+    local savedCamCF = cam and cam.CFrame or nil
+
+    if cam and savedCamCF then
+        cam.CameraType = Enum.CameraType.Scriptable
+        cam.CFrame = savedCamCF
+    end
+
+    Character.Archivable = true
+    local InvisibleCharacter = Character:Clone()
+    InvisibleCharacter.Name = game.Players.LocalPlayer.Name
+    InvisibleCharacter.Parent = Lighting
+
+    for _, v in ipairs(InvisibleCharacter:GetDescendants()) do
+        if v:IsA("BasePart") then
+            if v.Name == "HumanoidRootPart" then
+                v.Transparency = 1
+            else
+                v.Transparency = 0.5
+            end
+        elseif v:IsA("Humanoid") then
+            v.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+            v.HealthDisplayDistance = 0
+            v.NameDisplayDistance = 0
+        end
+    end
+
+    getgenv()._invisChar = Character
+    getgenv()._invisClone = InvisibleCharacter
+    getgenv()._IsInvis = true
+
+    local Root = Character:FindFirstChild("HumanoidRootPart")
+    if Root then
+        getgenv()._invisRootCF = Root.CFrame
+        Character:MoveTo(Vector3.new(1e9, math.pi * 1e30, 1e9))
+    end
+
+    InvisibleCharacter.Parent = Workspace
+
+    if Root and getgenv()._invisRootCF then
+        local CloneRoot = InvisibleCharacter:FindFirstChild("HumanoidRootPart")
+        if CloneRoot then
+            CloneRoot.CFrame = getgenv()._invisRootCF
+        end
+    end
+
+    task.delay(0.001, function()
+        getgenv()._invisTransition = false
+    end)
+
+    Player.Character = InvisibleCharacter
+
+    if cam and savedCamCF then
+        local CloneHum = InvisibleCharacter:FindFirstChildOfClass("Humanoid")
+        cam.CameraSubject = CloneHum or InvisibleCharacter:FindFirstChild("HumanoidRootPart")
+        cam.CFrame = savedCamCF
+        cam.CameraType = Enum.CameraType.Custom
+    end
+
+    lockCamera(savedCamCF)
+
+    local Anim = InvisibleCharacter:FindFirstChild("Animate")
+    if Anim then
+        Anim.Disabled = true
+        Anim.Disabled = false
+    end
+
+    local function onCloneDied()
+        if getgenv()._invisCloneDead then return end
+        getgenv()._invisCloneDead = true
+        getgenv()._invisEnabled = false
+        if getgenv()._IsInvis and getgenv()._TurnVisible then
+            getgenv()._TurnVisible(true)
+        end
+    end
+
+    local CloneHum = InvisibleCharacter:FindFirstChildOfClass("Humanoid")
+    if CloneHum then
+        getgenv()._invisDiedConn = CloneHum.Died:Connect(onCloneDied)
+    end
+
+    getgenv()._invisRunning = false
+    updateVisual()
+end
+
+getgenv()._TurnVisible = function(fromDeath)
+    if getgenv()._invisTurning then return end
+    getgenv()._invisTurning = true
+    getgenv()._invisTransition = true
+
+    local RealChar = getgenv()._invisChar
+    local Ghost = getgenv()._invisClone
+
+    local cam = Workspace.CurrentCamera
+    local savedCamCF = cam and cam.CFrame or nil
+
+    if cam and savedCamCF then
+        cam.CameraType = Enum.CameraType.Scriptable
+        cam.CFrame = savedCamCF
+    end
+
+    if not RealChar then
+        if Ghost and Ghost.Parent then
+            pcall(function() Ghost:Destroy() end)
+        end
+        cleanup()
+        getgenv()._invisTurning = false
+        if cam then
+            cam.CameraType = Enum.CameraType.Custom
+        end
+        task.delay(0.15, function()
+            getgenv()._invisTransition = false
+        end)
+        updateVisual()
+        return
+    end
+
+    if getgenv()._invisCloneDead and not fromDeath then
+        if Ghost and Ghost.Parent then
+            pcall(function() Ghost:Destroy() end)
+        end
+        cleanup()
+        getgenv()._invisTurning = false
+        if cam then
+            cam.CameraType = Enum.CameraType.Custom
+        end
+        task.delay(0.001, function()
+            getgenv()._invisTransition = false
+        end)
+        updateVisual()
+        return
+    end
+
+    local RealRoot = RealChar:FindFirstChild("HumanoidRootPart")
+    local GhostRoot = Ghost and Ghost:FindFirstChild("HumanoidRootPart")
+
+    if GhostRoot and RealRoot then
+        RealRoot.CFrame = GhostRoot.CFrame
+        RealRoot.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        RealRoot.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        if RealRoot.Velocity then
+            RealRoot.Velocity = Vector3.new(0, 0, 0)
+        end
+        if RealRoot.RotVelocity then
+            RealRoot.RotVelocity = Vector3.new(0, 0, 0)
+        end
+    elseif getgenv()._invisRootCF and RealRoot then
+        RealRoot.CFrame = getgenv()._invisRootCF
+    end
+
+    RealChar.Parent = Workspace
+    Player.Character = RealChar
+
+    local Hum = RealChar:FindFirstChildOfClass("Humanoid")
+    if cam and savedCamCF then
+        cam.CameraSubject = Hum or RealRoot
+        cam.CFrame = savedCamCF
+        cam.CameraType = Enum.CameraType.Custom
+    end
+
+    if Hum then
+        Hum.PlatformStand = true
+        task.wait(0.001)
+        Hum.PlatformStand = false
+    end
+
+    lockCamera(savedCamCF)
+
+    if Ghost and Ghost.Parent then
+        pcall(function() Ghost:Destroy() end)
+    end
+
+    cleanup()
+    getgenv()._invisTurning = false
+    task.delay(0.001, function()
+        getgenv()._invisTransition = false
+    end)
+    updateVisual()
+end
+
+local function stopInvis()
+    getgenv()._invisEnabled = false
+    if getgenv()._TurnVisible then
+        getgenv()._TurnVisible(false)
+    else
+        if getgenv()._invisClone and getgenv()._invisClone.Parent then
+            pcall(function() getgenv()._invisClone:Destroy() end)
+        end
+        if getgenv()._invisChar then
+            pcall(function() getgenv()._invisChar.Parent = Workspace end)
+            Player.Character = getgenv()._invisChar
+            local Hum = getgenv()._invisChar:FindFirstChildOfClass("Humanoid")
+            if Hum then
+                Workspace.CurrentCamera.CameraSubject = Hum
+            end
+        end
+        cleanup()
+    end
+    updateVisual()
+end
+
+toggleBtn.MouseButton1Click:Connect(function()
+    if getgenv()._IsInvis then
+        stopInvis()
+    else
+        startInvis()
+    end
+end)
+
+Player.CharacterAdded:Connect(function()
+    task.wait(1)
+    if getgenv()._IsInvis then
+        local c = getgenv()._invisChar
+        if c and c.Parent ~= Workspace then
+            getgenv()._IsInvis = false
+            getgenv()._invisCloneDead = false
+            if getgenv()._invisClone and getgenv()._invisClone.Parent then
+                pcall(function() getgenv()._invisClone:Destroy() end)
+            end
+            cleanup()
+            updateVisual()
+        end
+    end
+end)
+
+updateVisual()
